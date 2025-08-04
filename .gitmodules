@@ -1,0 +1,4 @@
+[submodule "references/sigma-limacharlie"]
+	path = references/sigma-limacharlie
+	url = https://github.com/refractionPOINT/sigma-limacharlie.git
+	branch = rules
