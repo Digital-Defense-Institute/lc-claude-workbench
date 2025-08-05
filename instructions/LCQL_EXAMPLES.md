@@ -114,6 +114,40 @@ This document provides practical LCQL query examples for common security investi
 -6h | plat==windows | NEW_PROCESS EXISTING_PROCESS | event/FILE_PATH contains "rundll32.exe" AND event/COMMAND_LINE not contains ".dll" | ts as Timestamp event/FILE_PATH as Path event/COMMAND_LINE as CommandLine routing/hostname as Hostname
 ```
 
+## 🚨 YARA and Malware Detection Queries
+
+<!-- Queries for hunting malware using YARA detections -->
+
+### Find all YARA detections
+```lcql
+-168h | * | YARA_DETECTION | / exists
+```
+
+### YARA detections within specific absolute time range
+```lcql
+2025-01-01 00:00:00 to 2025-01-07 23:59:59 | * | YARA_DETECTION | / exists
+```
+
+### YARA detections with specific rule names
+```lcql
+-24h | * | YARA_DETECTION | event/RULE_NAME contains "CobaltStrike" OR event/RULE_NAME contains "Sliver" | event/RULE_NAME as Rule event/FILE_PATH as File routing/hostname as Host
+```
+
+### YARA detections grouped by rule and host
+```lcql
+-168h | * | YARA_DETECTION | event/RULE_NAME as Rule routing/hostname as Host COUNT(event) as Detections GROUP BY(Rule, Host)
+```
+
+### YARA detections with file paths
+```lcql
+-24h | * | YARA_DETECTION | event/FILE_PATH exists | event/FILE_PATH as MaliciousFile event/RULE_NAME as DetectionRule routing/hostname as InfectedHost ts as DetectionTime
+```
+
+### Process-based YARA detections
+```lcql
+-168h | * | YARA_DETECTION | event/PROCESS/PROCESS_ID exists | event/PROCESS/FILE_PATH as Process event/PROCESS/PROCESS_ID as PID event/RULE_NAME as Rule routing/hostname as Host
+```
+
 ## 📖 LCQL Query Structure
 
 <!-- Understanding the fundamental structure of LCQL queries -->
@@ -123,12 +157,43 @@ This document provides practical LCQL query examples for common security investi
 <time_range> | <platform_filter> | <event_types> | <filter_conditions> | <output_fields>
 ```
 
+### ⚠️ CRITICAL: Event Type Positioning
+**Event types (NEW_PROCESS, YARA_DETECTION, NETWORK_CONNECTIONS, etc.) MUST be placed in the 3rd position of the query, NOT in the filter conditions (4th position).**
+
+#### ✅ CORRECT Examples:
+```lcql
+-1h | * | YARA_DETECTION | / exists
+-24h | * | NEW_PROCESS NETWORK_CONNECTIONS | event/FILE_PATH contains "suspicious"
+-168h | plat == windows | CODE_IDENTITY YARA_DETECTION | / exists
+```
+
+#### ❌ INCORRECT Examples:
+```lcql
+-1h | * | * | event_type == "YARA_DETECTION"  # WRONG - event type in filter
+-24h | * | * | routing/event_type == "NEW_PROCESS"  # WRONG - event type in filter
+```
+
 ### Time Ranges
+
+#### Relative Time Formats (from current time)
+- `-<number>m` - Minutes in the past (e.g., `-30m`, `-5m`)
+- `-<number>h` - Hours in the past (e.g., `-1h`, `-24h`, `-168h`)
+
+Common examples:
+- `-5m` - Last 5 minutes
+- `-30m` - Last 30 minutes
 - `-1h` - Last hour
 - `-6h` - Last 6 hours
-- `-12h` - Last 12 hours
-- `-24h` - Last 24 hours
-- `-7d` - Last 7 days
+- `-24h` - Last 24 hours (1 day)
+- `-48h` - Last 48 hours (2 days)
+- `-168h` - Last 168 hours (7 days)
+- `-720h` - Last 720 hours (30 days)
+
+#### Absolute Time Ranges
+- Format: `YYYY-MM-DD HH:MM:SS to YYYY-MM-DD HH:MM:SS`
+- Example: `2025-01-01 00:00:00 to 2025-01-02 00:00:00`
+
+**⚠️ IMPORTANT**: Days (e.g., `-7d`, `-30d`) are NOT valid LCQL time selectors. Use hours (`h`) or minutes (`m`) for relative times, or absolute date-time ranges.
 
 ### Platform Filters
 - `plat == windows` - Windows only
@@ -164,3 +229,76 @@ This document provides practical LCQL query examples for common security investi
 4. **Use GROUP BY** for statistical analysis and anomaly detection
 5. **Alias fields** with `as` for cleaner output
 6. **Test filters incrementally** - build complex queries step by step
+
+## ⚠️ CRITICAL: Query Validation and Event Structure
+
+**NEVER assume that an initial query with no results means the events don't exist.** Your query syntax or field paths may be incorrect.
+
+### Query Validation Workflow
+
+1. **First, validate event existence** with a simple query:
+   ```lcql
+   -1h | * | EVENT_TYPE | event/* exists
+   ```
+   Use a very small limit (5-10) to check if events exist and examine their structure.
+
+2. **Check organization-specific event schemas**:
+   ```python
+   # Single event type
+   get_event_schema(name="NEW_PROCESS")
+   
+   # Multiple event types at once
+   get_event_schemas_batch(event_names=["NEW_PROCESS", "YARA_DETECTION", "DNS_REQUEST"])
+   ```
+   Note: Some event types may show empty schemas but still contain data.
+
+3. **Reference sample events** in this repository:
+   - Check `@instructions/SAMPLE_EVENTS.md` for detailed event structures
+   - Look for the specific event type to understand field paths
+   - Pay attention to nested structures and array fields
+
+4. **Examine the event structure** before crafting complex queries:
+   - Look at the raw event data to understand field paths
+   - Check nested structures (e.g., `event/EVENTS/*/SOURCE/FILE_PATH`)
+   - Note which fields are arrays vs single values
+
+5. **Use available resources** before writing complex queries:
+   - Check LCQL examples in this project for similar queries
+   - Use the `generate_lcql_query()` tool for AI assistance
+   - Reference `SAMPLE_EVENTS.md` for event structures
+   - Use `get_event_schema()` to check org-specific schemas
+
+6. **Build incrementally**:
+   - Start with `event/* exists` to see raw data
+   - Add one filter at a time
+   - Test each addition before proceeding
+
+### Example: Finding SENSITIVE_PROCESS_ACCESS Events
+
+```lcql
+# Step 1: Check if events exist
+-168h | * | SENSITIVE_PROCESS_ACCESS | event/* exists
+
+# Step 2: Examine structure to find source process path  
+-168h | * | SENSITIVE_PROCESS_ACCESS | event/* exists | event/EVENTS as Events
+
+# Step 3: Build the final query based on discovered structure
+-168h | * | SENSITIVE_PROCESS_ACCESS | event/* exists | 
+event/*/event/SOURCE/FILE_PATH as source_process 
+COUNT(event) as access_count 
+GROUP BY(source_process)
+```
+
+### Common Pitfalls to Avoid
+
+- ❌ Assuming field paths without checking structure
+- ❌ Giving up when first query returns no results
+- ❌ Writing complex queries without understanding event schema
+- ❌ Assuming empty schemas mean no events exist (some events have empty schemas but still contain data)
+- ❌ **Using undocumented LCQL operators** - NEVER use HAVING, LIMIT, WHERE, or other SQL-like operators unless explicitly shown in LCQL examples
+- ✅ Always validate event existence first with `event/* exists`
+- ✅ Check org-specific schemas with `get_event_schema()` tools
+- ✅ Reference `SAMPLE_EVENTS.md` for event structure examples
+- ✅ Use `generate_lcql_query()` for AI-assisted query generation
+- ✅ Build queries incrementally, testing each step
+- ✅ **Only use documented LCQL syntax** - When in doubt, use generate_lcql_query() to verify proper syntax

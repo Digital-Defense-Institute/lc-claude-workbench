@@ -10,6 +10,7 @@ This document contains sample event structures for various LimaCharlie event typ
   - [EXISTING_PROCESS](#existing_process)
   - [NEW_DOCUMENT](#new_document)
   - [CODE_IDENTITY](#code_identity)
+  - [REGISTRY_WRITE](#registry_write)
   - [WEL (Windows Event Logs)](#wel-windows-event-logs)
   - [Sysmon Events](#sysmon-events)
 - [Azure/O365 Events](#azureo365-events)
@@ -149,6 +150,31 @@ Code signing and file integrity information.
         "hostname": "DESKTOP-XYZ789.example.local",
         "plat": 268435456
     }
+}
+```
+
+### REGISTRY_WRITE
+Registry modification event, often indicating tool execution or persistence mechanisms.
+
+```json
+{
+  "event": {
+    "PROCESS_ID": 10828,
+    "REGISTRY_KEY": "\\REGISTRY\\USER\\S-1-5-21-2760201226-1107251346-1237796511-1120\\SOFTWARE\\Sysinternals\\PsExec\\EulaAccepted",
+    "REGISTRY_VALUE": "AQAAAA==",
+    "SIZE": 4,
+    "TYPE": 4
+  },
+  "routing": {
+    "event_type": "REGISTRY_WRITE",
+    "hostname": "eng-01.initechsw.com",
+    "plat": 268435456,
+    "tags": [
+      "yara_detection_memory"
+    ],
+    "this": "ae547bc0db3d64d935347698688fb5f5",
+    "parent": "276d27eb487c9aa66967d765688fb594"
+  }
 }
 ```
 
@@ -1031,6 +1057,9 @@ detection = generate_dr_rule_detection(
 - `event.HASH` - File hash (SHA256)
 - `event.USER_NAME` - Process user context
 - `event.FILE_IS_SIGNED` - Code signing status (0/1)
+- `event.REGISTRY_KEY` - Registry key path (REGISTRY_WRITE events)
+- `event.REGISTRY_VALUE` - Registry value data (REGISTRY_WRITE events)
+- `event.PROCESS_ID` - Process ID performing the action
 
 ### Common WEL Paths
 - `event.EVENT.System.EventID` - Windows Event ID

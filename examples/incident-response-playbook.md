@@ -278,7 +278,7 @@ is_online(sid=sid)
 ```python
 # Generate a comprehensive report
 report_query = f"""
--7d | sid == '{sid}' | 
+-168h | sid == '{sid}' | 
 * | 
 event_type == 'DETECTION' |
 event as FullEvent

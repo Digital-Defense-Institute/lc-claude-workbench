@@ -1,4 +1,4 @@
-# LimaCharlie MCP Workflows & Examples
+Did# LimaCharlie MCP Workflows & Examples
 
 <!-- 
   Developed by Digital Defense Institute (https://digitaldefenseinstitute.com)
@@ -55,6 +55,147 @@ cs_strings = [
 ]
 find_strings(sid="sensor-id", strings=cs_strings, pid=pid)
 ```
+
+## 🎯 Investigating YARA Detections in Memory
+
+<!-- YARA detections in memory are critical alerts requiring immediate investigation -->
+
+### Step 1: Query Recent YARA Detections
+```python
+# Get current UTC timestamp
+current_time = $(date -u +%s)
+
+# Query YARA detections from last 7 days
+yara_query = """
+-168h | * | YARA_DETECTION | 
+event/PROCESS/PROCESS_ID exists |
+event/RULE_NAME as Rule
+event/PROCESS/FILE_PATH as Process
+event/PROCESS/PROCESS_ID as PID
+routing/hostname as Host
+routing/sid as SensorID
+ts as DetectionTime
+"""
+results = run_lcql_query(query=yara_query, limit=50)
+
+# For specific rule matches
+specific_rule_query = """
+-168h | * | YARA_DETECTION |
+event/RULE_NAME contains "CobaltStrike" OR event/RULE_NAME contains "Mimikatz" |
+event/RULE_NAME as Rule
+event/PROCESS/FILE_PATH as Process
+event/PROCESS/PROCESS_ID as PID
+routing/hostname as Host
+routing/sid as SensorID
+"""
+```
+
+### Step 2: Investigate Detected Process
+```python
+# From YARA detection results
+sid = "sensor-id-from-detection"
+pid = detected_pid
+
+# Check if sensor is online first
+is_online(sid=sid)
+
+# Get process details and modules
+process_info = get_processes(sid=sid)
+modules = get_process_modules(sid=sid, pid=pid)
+
+# Search for additional IOCs in memory
+suspicious_strings = [
+    "ReflectiveLoader",
+    "beacon",
+    "mimikatz",
+    "\\pipe\\msagent",
+    "sekurlsa::logonpasswords"
+]
+string_search = find_strings(sid=sid, strings=suspicious_strings, pid=pid)
+```
+
+### Step 3: Analyze Process Relationships
+```python
+# Get parent-child relationships using LCQL
+process_tree_query = f"""
+-6h | sid == '{sid}' |
+NEW_PROCESS EXISTING_PROCESS |
+event/PROCESS_ID == {pid} OR event/PARENT/PROCESS_ID == {pid} |
+event/FILE_PATH as Process
+event/COMMAND_LINE as CommandLine
+event/PARENT/FILE_PATH as ParentProcess
+event/PROCESS_ID as PID
+event/PARENT/PROCESS_ID as ParentPID
+routing/this as Atom
+routing/parent as ParentAtom
+"""
+process_tree = run_lcql_query(query=process_tree_query, limit=100)
+```
+
+### Step 4: Check Network Activity
+```python
+# Network connections from the detected process
+network_query = f"""
+-24h | sid == '{sid}' |
+NETWORK_CONNECTIONS |
+event/PROCESS_ID == {pid} |
+event/NETWORK_ACTIVITY/DESTINATION/IP_ADDRESS as DestIP
+event/NETWORK_ACTIVITY/DESTINATION/PORT as Port
+event/FILE_PATH as Process
+ts as ConnectionTime
+"""
+network_activity = run_lcql_query(query=network_query, limit=50)
+```
+
+### Step 5: Check for Persistence
+```python
+# Registry modifications by the process
+persistence_query = f"""
+-24h | sid == '{sid}' |
+WEL |
+event/EVENT/System/EventID == "13" AND
+event/EVENT/EventData/ProcessId == "{pid}" |
+event/EVENT/EventData/TargetObject as RegistryKey
+event/EVENT/EventData/Details as Value
+"""
+registry_changes = run_lcql_query(query=persistence_query, limit=50)
+
+# File drops
+file_creation_query = f"""
+-24h | sid == '{sid}' |
+FILE_CREATE |
+event/PARENT/PROCESS_ID == {pid} |
+event/FILE_PATH as DroppedFile
+event/HASH as FileHash
+"""
+file_drops = run_lcql_query(query=file_creation_query, limit=50)
+```
+
+### Step 6: Response Actions
+```python
+# Based on investigation findings
+if confirmed_malicious:
+    # Tag the system
+    add_tag(sid=sid, tag="yara_detection_confirmed", ttl=604800)  # 7 days
+    
+    # Consider isolation (requires explicit approval)
+    print("⚠️ WARNING: This system has confirmed malicious activity.")
+    print("Network isolation would disconnect all network access.")
+    print("To isolate, explicitly confirm: 'Yes, isolate the system'")
+    
+    # Generate detection summary
+    summary = generate_detection_summary(
+        query=f"YARA rule {rule_name} detected in process {process_name} PID {pid}"
+    )
+```
+
+### Key Points for YARA Memory Investigations:
+- **Act quickly** - Memory artifacts are volatile
+- **Check process legitimacy** - Verify if process should exist
+- **Look for injection** - Check if legitimate process was compromised
+- **Examine network activity** - C2 communications often follow
+- **Document everything** - YARA detections are high-confidence alerts
+- **Consider containment** - But always with explicit approval
 
 ## 🎯 LCQL Threat Hunting
 
