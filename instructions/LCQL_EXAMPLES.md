@@ -25,8 +25,10 @@ This document provides practical LCQL query examples for common security investi
 
 ### Analyze network activity by specific process
 ```lcql
--6h | plat==windows | NETWORK_CONNECTIONS | event/FILE_PATH contains "rundll32.exe" | event/FILE_PATH event/NETWORK_ACTIVITY/DESTINATION/IP_ADDRESS as dest_ip event/NETWORK_ACTIVITY/DESTINATION/PORT as dest_port
+-6h | plat==windows | NETWORK_CONNECTIONS | event/FILE_PATH contains "rundll32.exe" | event/FILE_PATH event/NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS as dest_ip event/NETWORK_ACTIVITY/*/DESTINATION/PORT as dest_port
 ```
+
+**⚠️ CRITICAL**: NETWORK_ACTIVITY is an array field - the `*/` notation is REQUIRED, not optional.
 
 ### Stack child processes by parent
 ```lcql
@@ -97,13 +99,17 @@ This document provides practical LCQL query examples for common security investi
 
 ### Network connections to specific IP
 ```lcql
--6h | * | NETWORK_CONNECTIONS| event/NETWORK_ACTIVITY/DESTINATION/IP_ADDRESS is "203.0.113.100" | event/FILE_PATH as path routing/hostname as host COUNT(path) as Count GROUP BY(path host)
+-6h | * | NETWORK_CONNECTIONS| event/NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS is "203.0.113.100" | event/FILE_PATH as path routing/hostname as host COUNT(path) as Count GROUP BY(path host)
 ```
+
+**⚠️ CRITICAL**: NETWORK_ACTIVITY is an array field - the `*/` notation is REQUIRED, not optional.
 
 ### Network connections by specific process
 ```lcql
--6h | plat==windows | NETWORK_CONNECTIONS | event/FILE_PATH contains "rundll32.exe" | event/FILE_PATH event/NETWORK_ACTIVITY/DESTINATION/IP_ADDRESS as dest_ip event/NETWORK_ACTIVITY/DESTINATION/PORT as dest_port
+-6h | plat==windows | NETWORK_CONNECTIONS | event/FILE_PATH contains "rundll32.exe" | event/FILE_PATH event/NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS as dest_ip event/NETWORK_ACTIVITY/*/DESTINATION/PORT as dest_port
 ```
+
+**⚠️ CRITICAL**: NETWORK_ACTIVITY is an array field - the `*/` notation is REQUIRED, not optional.
 
 ## 🔗 Combined Analysis Examples
 
@@ -219,6 +225,184 @@ Common examples:
 - `SUM()` - Sum numeric values
 - `AVG()` - Average numeric values
 
+## 🎯 Atom-Based Event Correlation [HIGHEST CONFIDENCE]
+
+<!-- Use atoms for reliable parent-child and cross-process event correlation -->
+
+Atoms are GUIDs that provide permanent event/process identification, unlike PIDs which get reused. This is one of the most powerful LCQL techniques for complex investigations.
+
+### Basic Atom Correlation Pattern
+```lcql
+# Find all events related to a specific process atom
+-24h | * | * | routing/this == "target-atom-here" OR routing/parent == "target-atom-here" | 
+routing/event_type as EventType 
+event/FILE_PATH as Process 
+routing/this as ThisAtom 
+routing/parent as ParentAtom 
+ts as Timestamp
+```
+
+### Process Tree Reconstruction
+```lcql
+# Build complete process tree from suspicious process
+-6h | * | NEW_PROCESS EXISTING_PROCESS | 
+routing/parent == "parent-atom-from-detection" | 
+event/FILE_PATH as ChildProcess 
+event/COMMAND_LINE as CommandLine 
+routing/this as ChildAtom 
+routing/parent as ParentAtom 
+ts as CreationTime 
+ORDER BY CreationTime ASC
+```
+
+### Cross-Process Activity Correlation
+```lcql
+# Find all network, file, and registry activity by process atom
+-24h | * | NETWORK_CONNECTIONS FILE_CREATE REGISTRY_WRITE | 
+routing/parent == "suspicious-process-atom" | 
+routing/event_type as ActivityType 
+event/FILE_PATH as TargetPath 
+routing/this as EventAtom 
+ts as ActivityTime
+```
+
+**Why Atoms are Critical:**
+- PIDs are reused after process termination
+- Atoms remain constant throughout process lifetime
+- Enable reliable correlation across event types
+- Essential for building accurate attack timelines
+
+## 📋 LCQL Query Development Methodology [HIGHEST CONFIDENCE]
+
+<!-- Proven approach for building reliable queries based on real-world testing -->
+
+### Step 1: Validate Data Existence
+```lcql
+# Always start here - verify events exist
+-1h | * | TARGET_EVENT_TYPE | event/* exists
+```
+Use limit=5 to quickly check if your target event type has data.
+
+### Step 2: Examine Event Structure  
+```lcql
+# Look at raw event structure
+-1h | * | TARGET_EVENT_TYPE | event/* exists | 
+event as RawEvent
+```
+This reveals actual field paths and array structures.
+
+### Step 3: Build Incrementally
+```lcql
+# Add one filter at a time
+-1h | * | TARGET_EVENT_TYPE | event/SPECIFIC_FIELD exists | 
+event/SPECIFIC_FIELD as Field
+
+# Then add hostname filter
+-1h | hostname contains "target-host" | TARGET_EVENT_TYPE | 
+event/SPECIFIC_FIELD exists | event/SPECIFIC_FIELD as Field
+
+# Finally add complex conditions
+-1h | hostname contains "target-host" | TARGET_EVENT_TYPE | 
+event/SPECIFIC_FIELD contains "suspicious-value" | 
+event/SPECIFIC_FIELD as Field
+```
+
+### Step 4: Optimize for Performance
+```lcql
+# Add time bounds, platform filters, and limits
+-6h | plat == windows | TARGET_EVENT_TYPE | 
+event/SPECIFIC_FIELD contains "value" | 
+event/SPECIFIC_FIELD as Field 
+COUNT(Field) as Count 
+GROUP BY(Field) 
+ORDER BY Count DESC
+```
+
+**Key Principles:**
+- **Never assume field paths** - Always verify with event/* exists first
+- **Array fields need */notation** - NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS
+- **Test each step** - Don't jump to complex queries
+- **Use small time ranges** - Expand once query works
+- **Leverage atoms** - For any parent-child or cross-process correlation
+
+### Common Field Path Patterns
+| Event Type | Common Arrays | Required Notation |
+|------------|---------------|------------------|
+| NETWORK_CONNECTIONS | NETWORK_ACTIVITY | `event/NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS` |
+| SENSITIVE_PROCESS_ACCESS | EVENTS | `event/EVENTS/*/SOURCE/FILE_PATH` |
+| DNS_REQUEST | No arrays | `event/DOMAIN_NAME` |
+| NEW_PROCESS | No arrays | `event/FILE_PATH` |
+
+## 🚨 GROUP BY Limitations and Solutions [HIGH CONFIDENCE]
+
+<!-- Critical limitations discovered through testing -->
+
+### Limitation: Complex Expressions Not Supported
+❌ **This will FAIL:**
+```lcql
+-24h | * | DNS_REQUEST | 
+event/DOMAIN_NAME as Domain 
+COUNT(Domain) as QueryCount 
+GROUP BY(Domain) 
+HAVING QueryCount > 10  # HAVING not supported
+```
+
+✅ **Use this instead:**
+```lcql
+-24h | * | DNS_REQUEST | 
+event/DOMAIN_NAME as Domain 
+COUNT(Domain) as QueryCount 
+GROUP BY(Domain) 
+ORDER BY QueryCount DESC  # Then filter results manually
+```
+
+### Limitation: No Advanced Filtering
+❌ **This will FAIL:**
+```lcql
+-24h | * | NEW_PROCESS | 
+event/FILE_PATH as Process 
+COUNT_UNIQUE(routing/hostname) as Hosts 
+GROUP BY(Process) 
+WHERE Hosts < 3  # WHERE not supported
+```
+
+✅ **Use this approach:**
+```lcql
+# Step 1: Get counts
+-24h | * | NEW_PROCESS | 
+event/FILE_PATH as Process 
+COUNT_UNIQUE(routing/hostname) as Hosts 
+GROUP BY(Process) 
+ORDER BY Hosts ASC
+
+# Step 2: Manually focus on low counts
+```
+
+### Beaconing Detection - Simplified Approach
+**Based on testing, this is the most reliable beaconing query:**
+
+```lcql
+# Find domains with high query frequency (potential C2)
+-6h | * | DNS_REQUEST | 
+event/DOMAIN_NAME as Domain 
+routing/hostname as Host 
+COUNT(event) as QueryCount 
+GROUP BY(Domain, Host) 
+ORDER BY QueryCount DESC
+```
+
+**Manual Analysis Required:**
+- Look for QueryCount > 20 in 6-hour window
+- Investigate domains with regular intervals
+- Check if domains are recently registered
+- Correlate with network connections to same IPs
+
+**Why This Works Better:**
+- No complex statistical functions required
+- Reliable across all LCQL implementations
+- Easy to tune threshold based on environment
+- Clear output for manual analysis
+
 ## 💡 Tips for Effective LCQL Queries
 
 <!-- Best practices for writing efficient and effective queries -->
@@ -229,6 +413,9 @@ Common examples:
 4. **Use GROUP BY** for statistical analysis and anomaly detection
 5. **Alias fields** with `as` for cleaner output
 6. **Test filters incrementally** - build complex queries step by step
+7. **Always use atoms** for parent-child and cross-process correlation
+8. **Verify array notation** - Use `*/` for NETWORK_ACTIVITY and other arrays
+9. **Validate data first** - Start every investigation with `event/* exists`
 
 ## 🔧 Troubleshooting Failed LCQL Queries
 
@@ -258,9 +445,11 @@ Common examples:
    - Use `get_processes(sid)` to check CREATION_TIME field
    - If creation is outside 7-day window, query recent activity instead
 
-5. **Array field notation**:
+5. **Array field notation** [CRITICAL - REQUIRED]:
    - NETWORK_ACTIVITY is an array: use `event/NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS`
    - Not: `event/NETWORK_ACTIVITY/DESTINATION/IP_ADDRESS`
+   - **This is MANDATORY, not optional** - queries will fail without `*/` for arrays
+   - Other common arrays: `event/EVENTS/*/`, `event/SIGNATURES/*/`
 
 6. **Common pitfalls**:
    - Process created before query window (check CREATION_TIME in get_processes)

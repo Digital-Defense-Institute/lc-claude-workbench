@@ -20,6 +20,7 @@ This document contains critical instructions for working with the LimaCharlie MC
 @workflows/investigation/CLAUDE.md - Guidelines for creating confidence-rated workflows
 @workflows/investigation/execution.md - Detecting renamed binaries & suspicious execution (CODE_IDENTITY focus)
 @workflows/investigation/lateral-movement.md - Systematic lateral movement detection with 5 PsExec methods
+@workflows/investigation/persistence.md - Comprehensive persistence detection using efficient registry-based techniques
 
 ### Sigma Detection Rules Reference
 @references/sigma-limacharlie/ - Community-maintained Sigma rules converted to LimaCharlie format
@@ -122,15 +123,34 @@ To continue investigation without isolation: 'Continue without isolation'"
 2. **Response Size Limits**: Always use `limit` parameter
 3. **LCQL Date Format**: Use `YYYY-MM-DD HH:MM:SS` for absolute times
 4. **YARA Rules**: Must exist in org, use rule name not content
+5. **Array Field Notation**: NETWORK_ACTIVITY requires `*/` notation - `event/NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS` (REQUIRED, not optional)
 
-### Understanding Atoms
+### Understanding Atoms [CRITICAL FOR INVESTIGATIONS]
 
 Atoms are GUIDs that uniquely identify events/processes. Unlike PIDs which can be reused, atoms provide permanent references:
 - **`routing/this`**: Current event's atom
 - **`routing/parent`**: Parent event's atom  
 - **`routing/target`**: Target event's atom (cross-process events)
 
-Always prefer atoms over PIDs for relationship tracking.
+**ALWAYS use atoms for:**
+- Building process trees and timelines
+- Correlating activity across event types
+- Tracking parent-child relationships
+- Any cross-process event correlation
+
+**Example atom-based correlation:**
+```python
+# Find all activity by a suspicious process atom
+correlation_query = f"""
+-24h | * | * | 
+routing/this == '{suspicious_atom}' OR routing/parent == '{suspicious_atom}' |
+routing/event_type as EventType
+event/FILE_PATH as Process
+ts as Timestamp
+"""
+```
+
+Always prefer atoms over PIDs for relationship tracking - this is one of the most powerful LCQL techniques.
 
 ## 🚀 Quick Start Examples
 
@@ -141,7 +161,7 @@ current_time = $(date -u +%s)  # Execute this shell command
 # Check sensor status
 is_online(sid="sensor-id")
 
-# Get recent detections (max limit=20 to avoid token limits)
+# Get recent detections (**MUST use limit≤20 to avoid 25K token limit**)
 get_historic_detections(start=current_time-600, end=current_time, limit=20)
 
 # Investigate process
@@ -153,7 +173,7 @@ get_process_modules(sid="sensor-id", pid=suspicious_pid)
 ### Essential Functions
 <!-- These are the most commonly used functions for daily operations -->
 - `is_online(sid)` - Check sensor status
-- `get_historic_detections(start, end, limit)` - Query recent detections (max limit=20)
+- `get_historic_detections(start, end, limit)` - Query recent detections (**MUST use limit≤20**)
 - `run_lcql_query(query, limit)` - Execute LCQL queries
 - `get_processes(sid)` - List running processes
 - `find_strings(sid, strings, pid)` - Search strings in memory
@@ -175,7 +195,8 @@ See @instructions/CLAUDE-REFERENCE.md for complete function list.
 3. **Handle large responses** with limit parameters
 4. **Show complete raw events** for important findings
 5. **Use parallel queries** for initial context gathering
-6. **Verify parent-child relationships** using atoms when available
+6. **Use atoms for all parent-child relationships** - atoms are permanent, PIDs are reused
+7. **Always use array notation** - NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS (required for arrays)
 7. **ALWAYS check for persistence** when C2/beacon activity is detected:
    - Query registry Run keys (HKLM/HKCU)
    - Check scheduled tasks
@@ -193,7 +214,7 @@ Use AI generation tools to create org-specific rules based on your actual event 
   - `get_services()` - Often returns 35K+ tokens
   - `get_detection_rules()` - Full ruleset too large
   - `get_process_strings()` - Can be very large
-  - `get_historic_detections()` - **Use limit≤20 to avoid 25K token limit**
+  - `get_historic_detections()` - **CRITICAL: MUST use limit≤20 to avoid 25K token limit**
 - Always use `limit` parameter
 - Start with small limits and increase if needed
 - Use LCQL filters to reduce result size
