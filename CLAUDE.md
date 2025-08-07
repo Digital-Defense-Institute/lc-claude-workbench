@@ -16,12 +16,39 @@ This document contains critical instructions for working with the LimaCharlie MC
 @examples/incident-response-playbook.md - Step-by-step IR procedures
 @examples/threat-hunting-queries.md - Proactive threat hunting patterns
 
+### Investigation Workflows (Confidence-Rated)
+@workflows/investigation/CLAUDE.md - Guidelines for creating confidence-rated workflows
+@workflows/investigation/execution.md - Detecting renamed binaries & suspicious execution (CODE_IDENTITY focus)
+@workflows/investigation/lateral-movement.md - Systematic lateral movement detection with 5 PsExec methods
+
 ### Sigma Detection Rules Reference
 @references/sigma-limacharlie/ - Community-maintained Sigma rules converted to LimaCharlie format
 - Contains 3,200+ detection rules from the Sigma project (on `rules` branch)
 - Organized by platform (Windows, Linux, macOS) and detection maturity
 - Use as inspiration for crafting queries and understanding suspicious behaviors
 - Update regularly with: `git submodule update --remote --merge` in project root
+
+## 📝 Continuous Documentation Improvement
+
+**IMPORTANT**: As you work with LimaCharlie MCP, continuously validate and improve these instructions:
+
+1. **Track Issues**: When queries fail or behave unexpectedly, note the root cause
+2. **Verify Examples**: Test that LCQL examples actually work with real data
+3. **Document Discoveries**: When you learn new patterns or limitations, suggest updates
+4. **Propose Changes**: Always suggest documentation improvements when you identify:
+   - Incorrect LCQL syntax or examples
+   - Missing guidance on timestamp handling
+   - Undocumented field structures or array notations
+   - New troubleshooting techniques
+   - Better investigation workflows
+
+**When suggesting updates**: 
+- Clearly explain what's wrong with current instructions
+- Provide the corrected version with examples
+- Ask user to confirm before making changes
+- Only update instructions you're 100% confident are correct
+
+Example: "I discovered that NETWORK_ACTIVITY requires array notation (*/). Should I update the documentation to reflect this?"
 
 ## ⚠️ Critical Notes
 
@@ -79,6 +106,10 @@ To continue investigation without isolation: 'Continue without isolation'"
   - Common fields with millisecond timestamps: `event_time`, `ts`, `timestamp`
   - **NEVER guess or estimate dates** - Always calculate precisely
   - Example: `1754346325` seconds = `2025-08-04 22:25:25 UTC` (NOT July or January!)
+- **Process Creation Times**: 
+  - Processes may have been created days/weeks ago, outside the 7-day LCQL query window
+  - **Always check CREATION_TIME** in get_processes() results before attempting historical queries
+  - If process creation is outside query range, focus on recent activity (network, DNS, file operations)
 - Historic queries have practical limitations:
   - Start with small time ranges (minutes) and expand as needed
   - API may timeout or truncate results for large time ranges

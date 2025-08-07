@@ -56,6 +56,22 @@ cs_strings = [
 find_strings(sid="sensor-id", strings=cs_strings, pid=pid)
 ```
 
+## 📋 Pre-Investigation Checklist
+
+<!-- Always perform these checks before complex queries -->
+1. **Check sensor data availability**: 
+   ```python
+   get_time_when_sensor_has_data(sid, start, end)
+   ```
+2. **Verify process creation time** before historical queries:
+   - Check CREATION_TIME in get_processes() output
+   - If outside 7-day window (168h), focus on recent activity
+3. **Test query patterns** with minimal filters first
+4. **Verify event types exist** before complex queries:
+   ```python
+   run_lcql_query("-1h | * | EVENT_TYPE | event/* exists", limit=1)
+   ```
+
 ## 🎯 Investigating YARA Detections in Memory
 
 <!-- YARA detections in memory are critical alerts requiring immediate investigation -->
@@ -135,12 +151,14 @@ process_tree = run_lcql_query(query=process_tree_query, limit=100)
 ### Step 4: Check Network Activity
 ```python
 # Network connections from the detected process
+# Note: NETWORK_ACTIVITY is an array - use */ for array traversal
 network_query = f"""
 -24h | sid == '{sid}' |
 NETWORK_CONNECTIONS |
 event/PROCESS_ID == {pid} |
-event/NETWORK_ACTIVITY/DESTINATION/IP_ADDRESS as DestIP
-event/NETWORK_ACTIVITY/DESTINATION/PORT as Port
+event/NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS as DestIP
+event/NETWORK_ACTIVITY/*/DESTINATION/PORT as Port
+event/NETWORK_ACTIVITY/*/IS_OUTGOING as Direction
 event/FILE_PATH as Process
 ts as ConnectionTime
 """

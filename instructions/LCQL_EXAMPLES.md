@@ -230,6 +230,44 @@ Common examples:
 5. **Alias fields** with `as` for cleaner output
 6. **Test filters incrementally** - build complex queries step by step
 
+## 🔧 Troubleshooting Failed LCQL Queries
+
+### When queries return empty results:
+
+1. **Verify event types exist**:
+   ```lcql
+   -1h | * | NEW_PROCESS EXISTING_PROCESS | event/* exists
+   ```
+   Use a very small limit (1-5) to check if events exist.
+
+2. **Check available event types for a sensor**:
+   ```lcql
+   -1h | hostname contains "target-host" | * | / exists | 
+   routing/event_type as EventType COUNT(EventType) as Count 
+   GROUP BY(EventType)
+   ```
+
+3. **Remove filters progressively**:
+   - Start broad: `-1h | * | EVENT_TYPE | event/* exists`
+   - Add platform: `-1h | plat == windows | EVENT_TYPE | event/* exists`
+   - Add hostname: `-1h | hostname contains "server" | EVENT_TYPE | event/* exists`
+   - Add field filters last
+
+4. **Check process creation times**:
+   - Processes may have been created days/weeks ago
+   - Use `get_processes(sid)` to check CREATION_TIME field
+   - If creation is outside 7-day window, query recent activity instead
+
+5. **Array field notation**:
+   - NETWORK_ACTIVITY is an array: use `event/NETWORK_ACTIVITY/*/DESTINATION/IP_ADDRESS`
+   - Not: `event/NETWORK_ACTIVITY/DESTINATION/IP_ADDRESS`
+
+6. **Common pitfalls**:
+   - Process created before query window (check CREATION_TIME in get_processes)
+   - Wrong field paths (verify against SAMPLE_EVENTS.md)
+   - Array fields need `*/` notation for traversal
+   - Missing data for time range (use get_time_when_sensor_has_data)
+
 ## ⚠️ CRITICAL: Query Validation and Event Structure
 
 **NEVER assume that an initial query with no results means the events don't exist.** Your query syntax or field paths may be incorrect.
