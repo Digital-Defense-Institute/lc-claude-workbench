@@ -44,34 +44,45 @@ The Model Context Protocol (MCP) is an open protocol that enables Claude AI to i
 
 ### 30-Second Setup
 
+**1. Clone this repository with submodules**
 ```bash
-# 1. Clone this repository with submodules
 git clone --recurse-submodules https://github.com/Digital-Defense-Institute/lc-claude-workbench.git
-# Or if you already cloned without submodules:
-# git submodule update --init --recursive
+```
+Or if you already cloned without submodules:
+```bash
+git submodule update --init --recursive
+```
 
-# 2. Enter the project directory
+**2. Enter the project directory**
+```bash
 cd lc-claude-workbench
+```
 
-# 3. Install Claude Code
+**3. Install Claude Code**
+```bash
 npm install -g @anthropic-ai/claude-code
+```
 
-# 4. Get your LimaCharlie Organization API Key and Org ID:
-#    https://app.limacharlie.io/org/<your-org-id>/rest-api
-#    Create a "User-Generated API Key" (this is at ORG level, not user level)
+**4. Get your LimaCharlie Organization API Key and Org ID**
+- Navigate to: `https://app.limacharlie.io/org/<your-org-id>/rest-api`
+- Create a "User-Generated API Key" (this is at ORG level, not user level)
 
-# 5. Configure MCP (run from project directory)
+**5. Configure MCP** (run from project directory)
+```bash
 claude mcp add \
   limacharlie \
   https://mcp.limacharlie.io/mcp \
   --transport http \
   --header "Authorization: Bearer YOUR_API_KEY:YOUR_ORG_ID"
-
-# 6. Start Claude in this project
-claude
-
-# 7. Test it: "List my LimaCharlie sensors"
 ```
+
+**6. Start Claude in this project**
+```bash
+claude
+```
+
+**7. Test it**
+Ask Claude: "List my LimaCharlie sensors"
 
 📖 **For detailed setup instructions, troubleshooting, and security best practices, see [setup.md](setup.md)**
 

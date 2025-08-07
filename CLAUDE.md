@@ -72,6 +72,13 @@ To continue investigation without isolation: 'Continue without isolation'"
 - **ALWAYS use UTC timestamps** when querying LimaCharlie APIs
 - **CRITICAL: Always get current time with `date -u +%s` FIRST** - Never use hardcoded timestamps
 - LimaCharlie expects all time parameters in Unix epoch format
+- **🚨 CRITICAL TIMESTAMP CONVERSION:**
+  - LimaCharlie event timestamps are in **milliseconds** (e.g., `1754346325456`)
+  - For Unix timestamp conversion, **divide by 1000** to get seconds: `1754346325`
+  - **ALWAYS double-check date conversions** - Use online converter or `date -d @<seconds>` command
+  - Common fields with millisecond timestamps: `event_time`, `ts`, `timestamp`
+  - **NEVER guess or estimate dates** - Always calculate precisely
+  - Example: `1754346325` seconds = `2025-08-04 22:25:25 UTC` (NOT July or January!)
 - Historic queries have practical limitations:
   - Start with small time ranges (minutes) and expand as needed
   - API may timeout or truncate results for large time ranges
