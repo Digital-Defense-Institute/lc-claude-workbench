@@ -1,4 +1,4 @@
-Did# LimaCharlie MCP Workflows & Examples
+# LimaCharlie MCP Workflows & Examples
 
 <!-- 
   Developed by Digital Defense Institute (https://digitaldefenseinstitute.com)

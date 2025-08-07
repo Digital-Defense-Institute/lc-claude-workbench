@@ -50,25 +50,27 @@ git clone --recurse-submodules https://github.com/Digital-Defense-Institute/lc-c
 # Or if you already cloned without submodules:
 # git submodule update --init --recursive
 
-# 2. Install Claude Code
+# 2. Enter the project directory
+cd lc-claude-workbench
+
+# 3. Install Claude Code
 npm install -g @anthropic-ai/claude-code
 
-# 3. Get your LimaCharlie Organization API Key and Org ID:
+# 4. Get your LimaCharlie Organization API Key and Org ID:
 #    https://app.limacharlie.io/org/<your-org-id>/rest-api
 #    Create a "User-Generated API Key" (this is at ORG level, not user level)
 
-# 4. Configure MCP
+# 5. Configure MCP (run from project directory)
 claude mcp add \
   limacharlie \
   https://mcp.limacharlie.io/mcp \
   --transport http \
   --header "Authorization: Bearer YOUR_API_KEY:YOUR_ORG_ID"
 
-# 5. Start Claude in this project
-cd lc-claude-workbench
+# 6. Start Claude in this project
 claude
 
-# 6. Test it: "List my LimaCharlie sensors"
+# 7. Test it: "List my LimaCharlie sensors"
 ```
 
 📖 **For detailed setup instructions, troubleshooting, and security best practices, see [setup.md](setup.md)**
